@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>For You | فوريو</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f0f0f;
+    --card: #1a1a1a;
+    --text: #ffffff;
+    --sub: #aaaaaa;
+    --radius: 14px;
+    --gap: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    min-height: 100vh;
+    padding: 12px;
+    padding-bottom: 30px;
+  }
+
+  .header {
+    text-align: center;
+    padding: 16px 0 20px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .header p {
+    font-size: 13px;
+    color: var(--sub);
+    margin-top: 4px;
+  }
+
+  /* ── شبكة الأزرار ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--gap);
+  }
+
+  .grid.single {
+    grid-template-columns: 1fr;
+  }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px 12px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    text-align: center;
+    transition: transform 0.12s, opacity 0.12s;
+    background: #2196F3; /* افتراضي أزرق */
+    width: 100%;
+    min-height: 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+  }
+
+  .btn .icon {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .btn .label {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* ── فاصل ── */
+  .section-title {
+    font-size: 12px;
+    color: var(--sub);
+    text-align: center;
+    margin: 16px 0 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── شاشة التحميل ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #333;
+    border-top-color: #2196F3;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── شاشة المنصات ── */
+  #platforms-screen { display: none; }
+  #main-screen { display: none; }
+
+  .back-btn {
+    background: #333 !important;
+    margin-bottom: 12px;
+  }
+
+  /* ── إشعار ── */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    transition: transform 0.3s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p style="color:#666;font-size:13px">جاري التحميل...</p>
+</div>
+
+<div id="main-screen">
+  <div class="header">
+    <h1>🎯 For You | فوريو</h1>
+    <p id="user-info">مرحباً!</p>
+  </div>
+  <div id="main-buttons"></div>
+</div>
+
+<div id="platforms-screen">
+  <div class="header">
+    <h1>📱 اختر التطبيق</h1>
+  </div>
+  <div class="grid single">
+    <button class="btn back-btn" onclick="showMain()">🔙 رجوع</button>
+  </div>
+  <div id="platforms-buttons" class="grid" style="margin-top:10px"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
+
+// ══════════════════════════════════
+//   جلب الإعدادات من البوت
+// ══════════════════════════════════
+const BOT_URL = 'https://YOUR_GITHUB_USERNAME.github.io/foryou-webapp';
+
+// إعدادات افتراضية — تُحدَّث من البوت
+let CONFIG = {
+  buttons: [
+    { id: 'serv',  label: '🎯 خدمات الرشق',    color: '#4CAF50', action: 'platforms' },
+    { id: 'earn',  label: '💊 تجميع كبسولات',   color: '#2196F3', action: 'send' },
+    { id: 'code',  label: '🎟 استخدام كود',      color: '#2196F3', action: 'send' },
+    { id: 'trans', label: '🔄 تحويل كبسولات',   color: '#2196F3', action: 'send' },
+    { id: 'info',  label: '👤 معلومات الحساب',  color: '#2196F3', action: 'send' },
+    { id: 'check', label: '🔍 فحص طلبي',        color: '#2196F3', action: 'send' },
+    { id: 'rules', label: '📜 شروط الاستخدام',  color: '#f44336', action: 'send' },
+    { id: 'charge',label: '💳 شحن الكبسولات',   color: '#FF9800', action: 'send' },
+  ],
+  platforms: [
+    { id: 'instagram', label: '📸 انستغرام', color: '#E1306C' },
+    { id: 'telegram',  label: '✈️ تليجرام',  color: '#0088cc' },
+    { id: 'tiktok',    label: '🎵 تيك توك',   color: '#010101' },
+    { id: 'youtube',   label: '▶️ يوتيوب',    color: '#FF0000' },
+    { id: 'twitter',   label: '🐦 تويتر',     color: '#1DA1F2' },
+    { id: 'facebook',  label: '👥 فيسبوك',    color: '#1877F2' },
+    { id: 'threads',   label: '🧵 ثريدز',     color: '#000000' },
+    { id: 'whatsapp',  label: '💬 واتساب',    color: '#25D366' },
+    { id: 'snapchat',  label: '👻 سناب شات',  color: '#FFFC00', labelColor: '#000' },
+    { id: 'kwai',      label: '🎬 كواي',      color: '#FF6900' },
+    { id: 'spotify',   label: '🎧 سبوتيفاي',  color: '#1DB954' },
+    { id: 'twitch',    label: '🟣 تويتش',     color: '#9146FF' },
+    { id: 'kick',      label: '🟢 كيك',       color: '#53FC18', labelColor: '#000' },
+    { id: 'other',     label: '📦 أخرى',      color: '#607D8B' },
+  ]
+};
+
+// ══════════════════════════════════
+//   تحميل الإعدادات من السيرفر
+// ══════════════════════════════════
+async function loadConfig() {
+  try {
+    const res = await fetch(`${BOT_URL}/config.json?t=${Date.now()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.buttons)   CONFIG.buttons   = data.buttons;
+      if (data.platforms) CONFIG.platforms  = data.platforms;
+    }
+  } catch(e) {
+    // استخدم الإعدادات الافتراضية
+  }
+  init();
+}
+
+// ══════════════════════════════════
+//   بناء الواجهة
+// ══════════════════════════════════
+function init() {
+  document.getElementById('loading').style.display = 'none';
+
+  // معلومات المستخدم
+  const user = tg.initDataUnsafe?.user;
+  if (user) {
+    document.getElementById('user-info').textContent =
+      `أهلاً ${user.first_name || ''}! 👋`;
+  }
+
+  buildMain();
+  showMain();
+}
+
+function buildMain() {
+  const container = document.getElementById('main-buttons');
+  container.innerHTML = '';
+
+  // صف الأزرار
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+
+  CONFIG.buttons.forEach((btn, i) => {
+    const el = document.createElement('button');
+    el.className = 'btn';
+    el.style.background = btn.color || '#2196F3';
+    if (btn.labelColor) el.style.color = btn.labelColor;
+    el.innerHTML = `<span class="label">${btn.label}</span>`;
+
+    // عرض كامل للأزرار الفردية في النهاية
+    if (CONFIG.buttons.length % 2 !== 0 && i === CONFIG.buttons.length - 1) {
+      el.style.gridColumn = '1 / -1';
+    }
+
+    el.onclick = () => handleAction(btn);
+    grid.appendChild(el);
+  });
+
+  container.appendChild(grid);
+}
+
+function buildPlatforms() {
+  const container = document.getElementById('platforms-buttons');
+  container.innerHTML = '';
+
+  CONFIG.platforms.forEach(plat => {
+    const el = document.createElement('button');
+    el.className = 'btn';
+    el.style.background = plat.color || '#2196F3';
+    if (plat.labelColor) el.style.color = plat.labelColor;
+    el.innerHTML = `<span class="label">${plat.label}</span>`;
+    el.onclick = () => {
+      sendToBot(`plat_${plat.id}`);
+    };
+    container.appendChild(el);
+  });
+}
+
+// ══════════════════════════════════
+//   التنقل بين الشاشات
+// ══════════════════════════════════
+function showMain() {
+  document.getElementById('main-screen').style.display = 'block';
+  document.getElementById('platforms-screen').style.display = 'none';
+}
+
+function showPlatforms() {
+  buildPlatforms();
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('platforms-screen').style.display = 'block';
+}
+
+// ══════════════════════════════════
+//   التفاعل مع البوت
+// ══════════════════════════════════
+function handleAction(btn) {
+  if (btn.action === 'platforms') {
+    showPlatforms();
+  } else if (btn.action === 'url' && btn.url) {
+    window.open(btn.url, '_blank');
+  } else {
+    sendToBot(btn.id);
+  }
+}
+
+function sendToBot(data) {
+  tg.sendData(data);
+}
+
+// ══════════════════════════════════
+//   إشعار
+// ══════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ══════════════════════════════════
+//   ابدأ
+// ══════════════════════════════════
+loadConfig();
+</script>
+</body>
+</html>
